@@ -633,14 +633,14 @@ def model_selection_learning_single_svm(images_path, color_space,
 
     # Split up data into randomized training and test sets
     rand_state = np.random.randint(0, 100)
-    cv = StratifiedShuffleSplit(n_splits=3, test_size=0.2, random_state=rand_state)
+    cv = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=rand_state)
 
     X_scaler = StandardScaler()
 
     pipeline = Pipeline(steps=[('scaler', X_scaler),
                                ('clf', clf)])
 
-    train_sizes = np.linspace(.1, 1.0, 5)
+    train_sizes = np.linspace(.1, 1.0, 8)
     t = time.time()
     train_sizes, train_scores, test_scores = \
         learning_curve(pipeline, X, y, train_sizes=train_sizes, cv=cv, n_jobs=8)
@@ -683,6 +683,9 @@ def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None],
     # Compute the number of pixels per step in x/y
     nx_pix_per_step = np.int(xy_window[0]*(1 - xy_overlap[0]))
     ny_pix_per_step = np.int(xy_window[1]*(1 - xy_overlap[1]))
+
+    if nx_pix_per_step == 0 or ny_pix_per_step == 0:
+        return []
 
     # Compute the number of windows in x/y
     nx_buffer = np.int(xy_window[0]*(xy_overlap[0]))
@@ -891,7 +894,7 @@ def find_cars(
 
 
     for scale in np.linspace(scale_min, scale_max, steps):
-        ystop = int(ystart + detection_window_size * scale * 2.0)
+        ystop = int(ystart + detection_window_size * scale * 1.6)
 
         if (ystop > ymax):
             ystop = ymax

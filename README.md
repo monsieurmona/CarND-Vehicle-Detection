@@ -29,6 +29,16 @@ Here are links to the labeled data for [vehicle](https://s3.amazonaws.com/udacit
 [image_luv_histogram]: ./output_images/color/luv_histogram.png
 [image_luv_histogram_image]: ./output_images/color/luv_histogram_image.png
 [image_concatenate_features]: ./output_images/color/concatenate_features.png
+[image_training_learning_rate_HSV]: ./output_images/training/training_learning_rate_HSV.png
+[image_training_learning_rate_LUV]: ./output_images/training/training_learning_rate_LUV.png
+[image_sliding_window_car_tops]: ./output_images/sliding_window/sliding_window_car_tops.jpg
+[image_sliding_window_scale_1]: ./output_images/sliding_window/sliding_window_scale_1.png
+[image_sliding_window_scale_2]: ./output_images/sliding_window/sliding_window_scale_2.png
+[image_sliding_window_scale_3]: ./output_images/sliding_window/sliding_window_scale_3.png
+[image_sliding_window_scale_4]: ./output_images/sliding_window/sliding_window_scale_4.png
+[image_sliding_window_scale_5]: ./output_images/sliding_window/sliding_window_scale_5.png
+[image_classified]: ./output_images/sliding_window/classified.png
+[image_heatmap]: ./output_images/sliding_window/heat_map.png
 
 
 
@@ -205,13 +215,68 @@ avg / total      0.991     0.991     0.991      7104
 
 Three tests per color space were executed and the average of the results were put into this table. The performace is similar in this table, but when the classifiers are used in the video they show very different performances. HSV fails to classify white cars for example. As LUV generalizes better, I choose this color space.
 
+**Learning Rates**
+
+Finally, I want to check if the classifier is overfitting. 
+
+|Learning Rates for a classifier<br>with HSV color space|Learning Rates for a classifier<br>with LUV color space|
+|:---:|:---|
+|![alt text][image_training_learning_rate_HSV]|![alt text][image_training_learning_rate_LUV]|
+The HSV classifier doesn't improve anymore aver 17000 training examples, whereas the LUV classifier would probably benefit from more training examples than available.
+
 
 ### Classification
-The trained classifier, its parameters and the scaler is loaded from the pickle file 
+The previously trained classifier, its parameters and the scaler is loaded from the pickle file. This is then used in the following pipeline.
 
+1. Load Video Frame
+1. Convert the image to the desired color space, calculate HOG
+1. Create sliding windows of multiple scales
+1. For each sliding window
+   1. Move the sliding window from top left to bottom right of the image (start at a given vertical offset, stop at a given vertical offset)
+   1. Use the trained classifier to detect a car for each window
+   1. Push the window shape and a confidence level to a list 
+1. Create a heat map with the previously found windows and confidence level
+1. Extract bounding boxes from heatmaps 
+1. Track bounding boxes and increase its age at every frame. Combine heatmaps from previous detection with new detection.
+1. Extract bounding boxes from combined heatmaps
+1. Delete detections if they were not update for a few rounds.
+1. Show bounding boxes, if they are old enough   
+    
+#### Preprocessing
+
+A frame from video is first converted to the color space that was just while creating the classifier. The HOG is then calculated for each channel for the the image with the same parameters.   
+    
 #### Sliding Window
 
+Cars are detected using a sliding window that cuts a rectangle from the image. The cutouts are classified then as car or as not-car. As there are cars that appear small and big in an image we need sliding windows of different scales. 
+
+Searching for cars in the sky would be for this task a waste of computation time. And searching for small cars in front of the vehicle is also not beneficial. So we need to define the search areas. 
+
+The camera was probably mounted close to the mirror in the middle of the car. The horizon and the car tops are roughly inline, no matter how far they are. The blue line in the picture below shows this. 
+
+![alt_text][image_sliding_window_car_tops]
+
+This means that the tops of the sliding windows of all scales should start at the same height. The images below show the 5 scales I have chosen.
+
+|![alt_text][image_sliding_window_scale_1]|![alt_text][image_sliding_window_scale_2]|![alt_text][image_sliding_window_scale_3]|
+|:---:|:---:|:---:|
+|![alt_text][image_sliding_window_scale_4]|![alt_text][image_sliding_window_scale_5]| |
+
+The bottom height is calculated by:
+```
+ystop = int(ystart + detection_window_size * scale * 1.6)
+```
+where `detection_window_size = 64`. This is the size of the trained classifier. 
+  
+The HOG, spatial and histogram features are extracted from the sliding window and then used for classification. 
+
+![alt_text][image_classified]
+
 #### Heatmap
+
+The measured confidence for an rectangle is used to built a heatmap. Only the confidence that exceeds a threshold is summed up for each pixel in each window. The heatmap is labels with the `label` function from `scipy.ndimage.measurements`. The heatmap and resulting bounding boxes are shown below. 
+
+![alt_text][image_heatmap]
 
 #### Tracking
 
@@ -226,28 +291,6 @@ The trained classifier, its parameters and the scaler is loaded from the pickle 
 
 
 
-#### 1. Explain how (and identify where in your code) you extracted HOG features from the training images.
-
-The code for this step is contained in the first code cell of the IPython notebook (or in lines # through # of the file called `some_file.py`).  
-
-I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an example of one of each of the `vehicle` and `non-vehicle` classes:
-
-![alt text][image1]
-
-I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`).  I grabbed random images from each of the two classes and displayed them to get a feel for what the `skimage.hog()` output looks like.
-
-Here is an example using the `YCrCb` color space and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
-
-
-![alt text][image2]
-
-#### 2. Explain how you settled on your final choice of HOG parameters.
-
-I tried various combinations of parameters and...
-
-#### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
-
-I trained a linear SVM using...
 
 ### Sliding Window Search
 
