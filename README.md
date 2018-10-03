@@ -220,7 +220,8 @@ Finally, I want to check if the classifier is overfitting.
 |Learning Rates for a classifier<br>with HSV color space|Learning Rates for a classifier<br>with LUV color space|
 |:---:|:---|
 |![alt text][image_training_learning_rate_HSV]|![alt text][image_training_learning_rate_LUV]|
-The HSV classifier doesn't improve anymore aver 17000 training examples, whereas the LUV classifier would probably benefit from more training examples than available.
+
+The HSV classifier doesn't improve anymore over 17000 training examples, whereas the LUV classifier would probably benefit from more training examples than available.
 
 
 ### Classification
@@ -237,12 +238,12 @@ The previously trained classifier, its parameters and the scaler is loaded from 
 1. Extract bounding boxes from heatmaps 
 1. Track bounding boxes and increase its age at every frame. Combine heatmaps from previous detection with new detection.
 1. Extract bounding boxes from combined heatmaps
-1. Delete detections if they were not update for a few rounds.
+1. Delete detections if they were not updated for a few rounds.
 1. Show bounding boxes, if they are old enough   
     
 #### Preprocessing
 
-A frame from video is first converted to the color space that was just while creating the classifier. The HOG is then calculated for each channel for the the image with the same parameters.   
+A frame from video is first converted to the color space that was used while creating the classifier. The HOG is then calculated for each channel for the the image with the same parameters.   
     
 #### Sliding Window
 
