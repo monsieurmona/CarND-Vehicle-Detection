@@ -16,10 +16,10 @@ class Detection:
         self.age = 0
         self.last_updated = 0;
 
-    def older(self):
-        self.age += 1
-        self.heat_map -= 0.4
-        self.heat_map = np.clip(self.heat_map, 0.0, 5.0)
+    def older(self, increase_age):
+        self.age += increase_age
+        self.heat_map -= 0.2
+        self.heat_map = np.clip(self.heat_map, 0.0, 3.0)
 
         alive = False
 
@@ -54,6 +54,17 @@ class Detection:
             self.bounding_box[0][1]:self.bounding_box[1][1],
             self.bounding_box[0][0]:self.bounding_box[1][0]] += self.heat_map
 
+    def get_confidence(self):
+        return np.max(self.heat_map)
+
+    def has_no_overlap(self, box2):
+        no_overlap = (self.bounding_box[0][0] > box2[1][0]) or (box2[0][0] > self.bounding_box[1][0]) or (self.bounding_box[0][1] > box2[1][1]) or (box2[0][1] > self.bounding_box[1][1])
+
+        return no_overlap
+
+    def has_overlap(self, box2):
+        return not(self.has_no_overlap(box2))
+
 
 class Trail:
     def __init__(self):
@@ -80,7 +91,7 @@ class Trail:
             min_distance = height * 0.3
 
         found = False
-        size_variance = 0.8
+        size_variance = 0.4
 
         for current_detection in current_detections:
             distance = self.get_distance(current_detection.heat_center, prediction.heat_center)
@@ -90,7 +101,7 @@ class Trail:
             cd_width = cd_bb_max_x - cd_bb_min_x
             cd_height = cd_bb_max_y - cd_bb_min_y
 
-            if distance < min_distance and (abs(cd_width - width) / width) < size_variance and (abs(cd_height - height) / height) < size_variance:
+            if prediction.has_overlap(current_detection.bounding_box) and distance < min_distance and (abs(cd_width - width) / width) < size_variance and (abs(cd_height - height) / height) < size_variance:
                 self.current_detection = current_detection
                 self.estimated_detection = prediction
                 self.distance = distance
@@ -140,28 +151,29 @@ class ObjectTracking:
 
             self.predictions = self.last_detections
             self.last_detections = []
+            new_detections_map =  {key: True for (key) in self.current_detections}
+            non_updated_predictions = []
 
             for prediction in self.predictions:
                 trail = Trail()
                 # try to find pairs of previous and current detections
                 found = trail.find_probable_trail(prediction, self.current_detections, search_radius)
 
-                # make predictions older
-                prediction.older()
-
                 if found == True:
+                    # make predictions older
+                    prediction.older(1)
+                    new_detections_map[trail.current_detection] = False
                     new_heat_map = np.zeros_like(heat_map)
-                    shift_x = trail.current_detection.heat_center[0] - prediction.heat_center[0]
-                    shift_y = trail.current_detection.heat_center[1] - prediction.heat_center[1]
+                    #shift_x = trail.current_detection.heat_center[0] - prediction.heat_center[0]
+                    #shift_y = trail.current_detection.heat_center[1] - prediction.heat_center[1]
 
                     # prediction.probable_move_x = prediction.probable_move_x * 0.7 + shift_x * 0.3
                     # prediction.probable_move_y = prediction.probable_move_y * 0.7 + shift_y * 0.3
 
-
                     # combine pervious heat map with heat map from current detection
                     prediction.add_to_heat_map(new_heat_map)
                     trail.current_detection.add_to_heat_map(new_heat_map)
-                    new_heat_map = np.clip(new_heat_map, 0, 5.0)
+                    new_heat_map = np.clip(new_heat_map, 0, 3.0)
                     new_boxes = self.get_boxes(new_heat_map)
 
                     # store new detections
@@ -172,18 +184,45 @@ class ObjectTracking:
                         updated_detections.append(detection_object)
 
                 else:
-                    prediction.probable_move_x = prediction.probable_move_x * 0.8
-                    prediction.probable_move_y = prediction.probable_move_y * 0.8
+                    # make predictions older
+                    prediction.older(0)
+                    #prediction.probable_move_x = prediction.probable_move_x * 0.8
+                    #prediction.probable_move_y = prediction.probable_move_y * 0.8
                     prediction.last_updated += 1
-                    if (prediction.last_updated < 10):
-                        updated_detections.append(prediction)
+                    if (prediction.last_updated < 5):
+                        non_updated_predictions.append(prediction)
 
+            # check if not-update predictions overlap with updated predictions
+            for non_updated_prediction in non_updated_predictions:
+                no_overlaps = True;
+                for updated_detection in updated_detections:
+                    no_overlap = non_updated_prediction.has_no_overlap(updated_detection.bounding_box)
+                    if no_overlap == False:
+                        no_overlaps = False
+
+                if (no_overlaps == True):
+                    updated_detections.append(non_updated_prediction)
+
+            # get new detections that are not ralated to previous detections
+            new_detections = [k for k, v in new_detections_map.items() if v == True]
+
+            # check if new detections overlap with previous detections and filter them
+            for new_detection in new_detections:
+                no_overlaps = True
+                for updated_detection in updated_detections:
+                    no_overlap = new_detection.has_no_overlap(updated_detection.bounding_box)
+
+                    if no_overlap == False:
+                        no_overlaps = False
+
+                if no_overlaps == True:
+                    updated_detections.append(new_detection)
 
         return updated_detections
 
 
 
-    def track(self, detections, heat_map):
+    def track(self, detections, heat_map, min_age = 10):
         self.set_current_detections(detections, heat_map)
         updated_detections = self.predict_update(heat_map)
 
@@ -192,112 +231,12 @@ class ObjectTracking:
         self.heat_map = np.zeros_like(heat_map)
         aged_detections = []
         for detection in self.last_detections:
-            detection.add_to_heat_map(self.heat_map)
-            if detection.age > 5:
+            #detection.add_to_heat_map(self.heat_map)
+            if detection.age > min_age:# and detection.get_confidence() > 0.3:
                 aged_detections.append(detection.bounding_box)
 
         return aged_detections
 
-
-
-        '''
-        # try to find pairs of previous and current detections
-
-        heat_map_width = len(heat_map[0])
-        heat_map_height = len(heat_map)
-
-        if self.predictions is not None:
-
-
-                shift_x = int(prediction.probable_move_x)
-                shift_y = int(prediction.probable_move_y)
-
-                print('------------------')
-                print('------------------')
-                print(trail.current_detection.heat_center)
-                print(prediction.heat_center)
-                print('------------------')
-                print(prediction.bounding_box[0][0])
-                print(prediction.bounding_box[0][1])
-                print(prediction.bounding_box[1][0])
-                print(prediction.bounding_box[1][1])
-                print(prediction.bounding_box)
-
-                if (prediction.bounding_box[0][0] + shift_x) < 0:
-                    shift_x = prediction.bounding_box[0][0]
-
-                if (prediction.bounding_box[1][0] + shift_x) >= heat_map_width:
-                    shift_x = heat_map_width - prediction.bounding_box[1][0] - 1
-
-                if (prediction.bounding_box[0][1] + shift_y) < 0:
-                    shift_y = prediction.bounding_box[0][1]
-
-                if (prediction.bounding_box[1][1] + shift_y) >= heat_map_height:
-                    shift_y = heat_map_height - prediction.bounding_box[1][1] - 1
-
-                prediction.bounding_box = ((
-                    prediction.bounding_box[0][0] + shift_x,
-                    prediction.bounding_box[0][1] + shift_y),(
-                    prediction.bounding_box[1][0] + shift_x,
-                    prediction.bounding_box[1][1] + shift_y))
-
-                prediction.heat_center[0] += shift_x
-                prediction.heat_center[1] += shift_y
-
-                print('------------------')
-                print(prediction.bounding_box)
-                print(prediction.bounding_box[0][0])
-                print(prediction.bounding_box[0][1])
-                print(prediction.bounding_box[1][0])
-                print(prediction.bounding_box[1][1])
-
-                # age predictions
-                prediction.older()
-                prediction.add_to_heat_map(new_heat_map)
-
-        else:
-            self.heat_map = heat_map
-            self.last_detections = self.current_detections.copy()
-            return []
-
-
-        # add the heat meap from current detection
-        for current_detection in self.current_detections:
-            current_detection.add_to_heat_map(new_heat_map)
-
-        new_heat_map = np.clip(new_heat_map, 0, 255)
-        new_heat_map = od.apply_threshold(new_heat_map, 3)
-
-        # Find final boxes from heatmap using label function
-        labels = od.label(new_heat_map)
-        self.heat_map = new_heat_map
-        boxes = od.get_boxes_from_labels(labels)
-        self.all_detections = boxes
-
-        # store new detections
-        self.set_current_detections(boxes, new_heat_map)
-
-        # try to find trails from old predictions to new detections
-        # to keep track of parameters
-        for trail in trails:
-            new_trail = Trail()
-            prediction = trail.estimated_detection
-            found = new_trail.find_probable_trail(prediction, self.last_detections, self.current_detections, search_radius)
-
-            if found == True:
-                new_trail.current_detection.age = prediction.age
-                new_trail.current_detection.probable_move_x = prediction.probable_move_x
-                new_trail.current_detection.probable_move_y = prediction.probable_move_y
-
-        self.last_detections = self.current_detections.copy()
-
-        aged_detections = []
-        for detection in self.last_detections:
-            if detection.age > 5:
-                aged_detections.append(detection.bounding_box)
-
-        return aged_detections
-        '''
 
 def car_detection_pipeline(
         image, ystart, detection_window_size, scale_min, scale_max, steps,
@@ -330,14 +269,15 @@ def car_detection_pipeline(
     heat_map = od.add_heat(heat_map, all_detection_boxes)
 
     # Apply threshold to help remove false positives
-    heat_map = od.apply_threshold(heat_map, 0.5)
-    heat_map_clipped = np.clip(heat_map, 0, 5.0)
+    heat_map = od.apply_threshold(heat_map, 0.2)
+    heat_map_clipped = np.clip(heat_map, 0, 3.0)
 
     # Find final boxes from heatmap using label function
     labels = od.label(heat_map_clipped)
     boxes = od.get_boxes_from_labels(labels)
-    boxes = object_tracking.track(boxes, heat_map_clipped)
-    draw_img = od.draw_labeled_bboxes(np.copy(image), boxes)
+    boxes_tracked = object_tracking.track(boxes, heat_map_clipped)
+    #draw_img = od.draw_labeled_bboxes(np.copy(image), boxes, (1.0, 0.0, 0.0), thick=9)
+    draw_img = od.draw_labeled_bboxes(image, boxes_tracked, (0.0, 0.0, 1.0))
     draw_img *= 255
 
     '''

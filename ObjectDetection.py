@@ -227,17 +227,24 @@ def extract_features_single_image(
     if (extract_hog_features == True):
         # Call get_hog_features() with vis=False, feature_vec=True
         hog_features = []
+        hog_features_histogram = []
         if hog_channel == 'ALL':
             for channel in range(image.shape[2]):
-                hog_features.extend(get_hog_features(image[:, :, channel],
-                                                     orient, pix_per_cell, cell_per_block,
-                                                     vis=False, feature_vec=True))
+                hog_features_channel = (get_hog_features(image[:, :, channel],
+                                                         orient, pix_per_cell, cell_per_block,
+                                                         vis=False, feature_vec=True))
+                hog_features_histogram_channel = hog_features_channel.reshape(int(len(hog_features_channel) / orient), orient)
+                hog_features_histogram_channel = np.sum(hog_features_histogram_channel, axis=0)
+
+                hog_features.extend(hog_features_channel)
+                hog_features_histogram.extend(hog_features_histogram_channel)
 
         else:
             hog_features = get_hog_features(image[:, :, hog_channel],
                                             orient, pix_per_cell, cell_per_block, vis=False, feature_vec=True)
 
         single_image_feature.append(hog_features)
+        single_image_feature.append(hog_features_histogram)
 
     return np.concatenate(single_image_feature)
 
@@ -827,11 +834,26 @@ def find_cars_in_sub_window(
                 if (extract_hog_features == True):
                     # Call get_hog_features() with vis=False, feature_vec=True
                     hog_features = []
+                    hog_features_histogram = []
                     if hog_channel == 'ALL':
                         hog_features1 = hog1[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
                         hog_features2 = hog2[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
                         hog_features3 = hog3[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
                         hog_features = np.hstack((hog_features1, hog_features2, hog_features3))
+
+                        hog_features_histogram_1 = hog_features1.reshape(
+                            int(len(hog_features1) / orient), orient)
+                        hog_features_histogram_1 = np.sum(hog_features_histogram_1, axis=0)
+
+                        hog_features_histogram_2 = hog_features2.reshape(
+                            int(len(hog_features2) / orient), orient)
+                        hog_features_histogram_2 = np.sum(hog_features_histogram_2, axis=0)
+
+                        hog_features_histogram_3 = hog_features3.reshape(
+                            int(len(hog_features3) / orient), orient)
+                        hog_features_histogram_3 = np.sum(hog_features_histogram_3, axis=0)
+
+                        hog_features_histogram = np.hstack((hog_features_histogram_1, hog_features_histogram_2, hog_features_histogram_3))
 
                     else:
                         if hog_channel == 0:
@@ -842,6 +864,7 @@ def find_cars_in_sub_window(
                             hog_features = hog3[ypos:ypos + nblocks_per_window, xpos:xpos + nblocks_per_window].ravel()
 
                     feature_window.append(hog_features)
+                    feature_window.append(hog_features_histogram)
 
             # Scale features and make a prediction
             feature_window = np.concatenate(feature_window)
@@ -861,7 +884,7 @@ def find_cars_in_sub_window(
                 test_prediction = int(decision_value > 0.0)
 
                 classification_results[i] = test_prediction
-                decision_values[i] = decision_value
+                decision_values[i] = decision_value + 0.1
 
             #if test_prediction > 0 or draw_all == True:
             #draw_all = True
@@ -970,11 +993,11 @@ def get_boxes_from_labels(labels):
 
     return boxes
 
-def draw_labeled_bboxes(img, boxes):
+def draw_labeled_bboxes(img, boxes, color=(0, 0, 1), thick=6):
     if boxes is not None:
         for bbox in boxes:
             # Draw the box on the image
-            cv2.rectangle(img, bbox[0], bbox[1], (0, 0, 1), 6)
+            cv2.rectangle(img, bbox[0], bbox[1], color, thick)
     # Return the image
     return img
 

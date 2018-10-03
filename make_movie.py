@@ -47,14 +47,14 @@ extract_hog_features = dist_pickle["extract_hog_features"]
 video_file_name = "project_video"
 video_file_name_ext = ".mp4"
 output_video_file_name = "output_video/"+video_file_name + "_output" + video_file_name_ext
-video = VideoFileClip("test_video/" + video_file_name + video_file_name_ext)#.subclip(28,31)
+video = VideoFileClip("test_video/" + video_file_name + video_file_name_ext)#.subclip(23,28)
 
 object_tracking = ot.ObjectTracking()
 
 output_video = video.fl_image(lambda image: ot.car_detection_pipeline(
     image=image,
-    ystart=400, detection_window_size=64,
-    scale_min=1.0, scale_max=4.0, steps=5,
+    ystart=390, detection_window_size=64,
+    scale_min=1.0, scale_max=4.0, steps=7,
     svcs=svcs, X_scalers=X_scalers,
     orient=orient,
     pix_per_cell=pix_per_cell, cell_per_block=cell_per_block,

@@ -1,11 +1,9 @@
-# Vehicle Detection
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
-
-My goal was for this project to write a software pipeline to detect vehicles in a video.
-
+# Vehicle Detection [![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
+by Mario Lüder
 
 The Project
 ---
+My goal was to write a software pipeline to detect vehicles in a video.
 
 The goals / steps of this project are the following:
 
@@ -173,11 +171,9 @@ All three tests boost the performance by roughly the same amount. Thus 16x16 wou
 
 There is only a small gain here. 16 Bins for a histogram seem to be the best.
     
-**ParameterC**
+**Parameter C**
 
-I use ``GridSearchCV`` from scikit-learn to train a classifier with different parameters. I chose LinearSVM with ``C = [{'C': [0.00001, 0.0001,0.001,0.01,0.1, 1,10]}]``
-
-Best parameters set found is:
+I chose to use LinearSVM to train a classifier with parameter C = ``[{'C': [0.00001, 0.0001,0.001,0.01,0.1, 1,10]}]``. In order to get quick results and comprehensible documentation I have use ``GridSearchCV`` from scikit-learn to execute this test. The best parameters C is:
 
 C = 0.001
 
@@ -204,6 +200,8 @@ avg / total      0.991     0.991     0.991      7104
 ```
 
 **Color Space** 
+
+The used color space effects also the performance of the classifier. Therefor I conducted a series of test with different color spaces as seen below. 
 
 |C|Color<br>Space|orien-<br>tations|Cells<br>per<br>block|Pixel<br>per<br>cell|Spatial<br>Binning<br>Size|Histo-<br>gram<br>Bins|Accu-<br>racy|Preci-<br>sion|Recall|Feat|Time|
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -274,68 +272,35 @@ The HOG, spatial and histogram features are extracted from the sliding window an
 
 #### Heatmap
 
-The measured confidence for an rectangle is used to built a heatmap. Only the confidence that exceeds a threshold is summed up for each pixel in each window. The heatmap is labels with the `label` function from `scipy.ndimage.measurements`. The heatmap and resulting bounding boxes are shown below. 
+The measured confidence for an rectangle is used to built a heatmap and then threshold by a confidence level. The heatmap is labels with the `label` function from `scipy.ndimage.measurements`. The heatmap and resulting bounding boxes are shown below. 
 
 ![alt_text][image_heatmap]
 
+As very high confidences are not useful to track cars the heat map is clipped at a certain threshold.
+
 #### Tracking
+The object tracking is implemented in file ```object_tracking.py```. See function `def track(self, detections, heat_map)`
 
-#### Filter
+For each detection (extracted bounding boxes from clipped heatmaps) we try to find a corresponding detection from previous frame. The detections must have a similar size and must be close to each other. If there are multiple choices, I choose the closest. The heatmap of the previous detection is weakened to reduce the influence of the previous detections. An empty heatmap of the size of an image is created and the two heatmaps of the previous and current detection is added. This heatmap is labeled again. The new detections are stored as last detection with an increased age. Those detections are used as "previous detections" while tracking detections in the next frame. 
 
+Old enough detections will be provided as bounding boxes and drawn into the video frame.
 
+Previous detections that don't match any current detection are also aged (heatmap weakended) and their "last updated" parameter is increased. If their last update is too long ago, they get deleted. New detections that are not related to previous detections are stored as last detections for the next tracking round.
 
+#### Pipeline 
 
+The object tracking is implemented in file `object_tracking.py`. See function `def car_detection_pipeline(...)` which calls the steps written above. 
 
+The video is created with file  `make_movie.py`
 
+### Video
 
-
-
-
-
-### Sliding Window Search
-
-#### 1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
-
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
-
-![alt text][image3]
-
-#### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
-
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
-
-![alt text][image4]
----
-
-### Video Implementation
-
-#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
-
-
-#### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
-
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
-
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
-
-### Here are six frames and their corresponding heatmaps:
-
-![alt text][image5]
-
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
-
-
----
+You may see the result in a video: Here's a [link to my video result](./output_video/project_video_output.mp4)
 
 ### Discussion
 
-#### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+I belief that using three classifiers, for cars seen on left, straight and right side would be beneficial. Also using depth of field would probably increase the accuracy of detections a lot. 
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+Improving tracking by analysing more similarity properties (similar colors, similar HOG) could also help.
 
+I believe that getting the motion of the detected vehicles and predicting where they would be in the next frame will improve the tracking algorithm. 
