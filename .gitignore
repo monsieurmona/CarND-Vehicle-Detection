@@ -1,1 +1,5 @@
-test_images/
+test_images/large_set_car_non_car/
+test_images/large_set_left_right_middle_no_car/
+test_images/medium_set_car_non_car/
+test_images/udacity/
+
